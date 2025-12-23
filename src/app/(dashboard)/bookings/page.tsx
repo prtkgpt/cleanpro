@@ -38,15 +38,22 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/bookings')
+    fetch('/api/bookings', {
+      credentials: 'include',
+    })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
           setBookings(data.data)
+        } else {
+          console.error('API Error:', data.error)
         }
         setLoading(false)
       })
-      .catch(() => setLoading(false))
+      .catch((error) => {
+        console.error('Fetch Error:', error)
+        setLoading(false)
+      })
   }, [])
 
   const getStatusColor = (status: string) => {
