@@ -7,30 +7,15 @@ export default withAuth(
     const path = req.nextUrl.pathname
 
     // Allow public routes
-    if (
-      path.startsWith('/login') ||
-      path.startsWith('/signup') ||
-      path.startsWith('/api/auth') ||
-      path.startsWith('/api/webhooks')
-    ) {
+    if (path.startsWith('/login') || path.startsWith('/signup')) {
       return NextResponse.next()
     }
 
     // Require auth for all other routes
     if (!token) {
-      // For API routes, return 401 instead of redirecting
-      if (path.startsWith('/api/')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-
       const loginUrl = new URL('/login', req.url)
       loginUrl.searchParams.set('callbackUrl', path)
       return NextResponse.redirect(loginUrl)
-    }
-
-    // Allow all API routes for authenticated users
-    if (path.startsWith('/api/')) {
-      return NextResponse.next()
     }
 
     // Role-based route protection
@@ -80,11 +65,12 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except:
+     * - api routes (they handle their own auth)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|public/).*)',
   ],
 }
