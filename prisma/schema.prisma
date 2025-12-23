@@ -1,0 +1,737 @@
+// CleanPro CRM - Prisma Schema
+// Multi-tenant SaaS for cleaning businesses
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// MULTI-TENANT & AUTH
+// ============================================================================
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  timezone  String   @default("America/New_York")
+
+  // Settings
+  currency               String  @default("USD")
+  cancellationPolicyHours Int    @default(24)
+  requireDeposit         Boolean @default(false)
+  depositPercent         Int     @default(0)
+
+  // Stripe
+  stripeCustomerId    String?
+  stripeAccountId     String?  // For Stripe Connect if needed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users           User[]
+  customers       Customer[]
+  cleaners        Cleaner[]
+  services        Service[]
+  bookings        Booking[]
+  invoices        Invoice[]
+  messages        Message[]
+  automations     Automation[]
+  auditLogs       AuditLog[]
+
+  @@index([slug])
+}
+
+enum UserRole {
+  ADMIN
+  DISPATCHER
+  CLEANER
+  CUSTOMER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  password      String
+  name          String?
+  phone         String?
+  role          UserRole
+  avatarUrl     String?
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Relations
+  cleaner       Cleaner?
+  customer      Customer?
+  auditLogs     AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+// ============================================================================
+// CUSTOMERS
+// ============================================================================
+
+model Customer {
+  id    String @id @default(cuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Contact
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+
+  // Stripe
+  stripeCustomerId String?
+
+  // Metadata
+  tags          String[]
+  notes         String?
+  source        String?  // "referral", "google", "facebook", etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  addresses Address[]
+  bookings  Booking[]
+  quotes    Quote[]
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
+}
+
+model Address {
+  id String @id @default(cuid())
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // Address
+  street      String
+  unit        String?
+  city        String
+  state       String
+  zip         String
+  country     String @default("US")
+
+  // Metadata
+  label           String?  // "Home", "Vacation Home", etc.
+  accessCode      String?
+  accessInstructions String?
+  parkingNotes    String?
+
+  // Property details
+  squareFeet Int?
+  bedrooms   Int?
+  bathrooms  Float?
+
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bookings Booking[]
+
+  @@index([customerId])
+}
+
+// ============================================================================
+// CLEANERS
+// ============================================================================
+
+model Cleaner {
+  id String @id @default(cuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Details
+  firstName    String
+  lastName     String
+  email        String
+  phone        String
+
+  // Employment
+  employeeId   String?
+  hireDate     DateTime?
+  hourlyRate   Float?
+
+  // Availability
+  availability Json?  // {monday: {start: "09:00", end: "17:00"}, ...}
+  color        String  @default("#3b82f6")  // For calendar display
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  assignments    CleanerAssignment[]
+  timeOffRequests TimeOffRequest[]
+
+  @@index([workspaceId])
+}
+
+model TimeOffRequest {
+  id String @id @default(cuid())
+
+  cleanerId String
+  cleaner   Cleaner @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+  approved  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cleanerId])
+}
+
+// ============================================================================
+// SERVICES & PRICING
+// ============================================================================
+
+enum ServiceType {
+  STANDARD
+  DEEP
+  MOVE_IN
+  MOVE_OUT
+  ADD_ON
+}
+
+model Service {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  type        ServiceType
+
+  // Pricing
+  basePrice      Float
+  pricingModel   String @default("FLAT")  // FLAT, PER_SQFT, PER_BEDROOM
+  pricePerSqft   Float?
+  pricePerBedroom Float?
+
+  // Duration
+  estimatedMinutes Int
+
+  // Checklist template (JSON array of tasks)
+  checklistTemplate Json?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bookings    Booking[]
+  quoteItems  QuoteItem[]
+
+  @@index([workspaceId])
+}
+
+// ============================================================================
+// QUOTES
+// ============================================================================
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model Quote {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  quoteNumber String  // e.g., "Q-2024-001"
+  status      QuoteStatus @default(DRAFT)
+
+  // Pricing
+  subtotal Float
+  tax      Float  @default(0)
+  discount Float  @default(0)
+  total    Float
+
+  // Metadata
+  notes      String?
+  validUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  items    QuoteItem[]
+  booking  Booking?
+
+  @@unique([workspaceId, quoteNumber])
+  @@index([workspaceId])
+  @@index([customerId])
+}
+
+model QuoteItem {
+  id String @id @default(cuid())
+
+  quoteId String
+  quote   Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  description String
+  quantity    Int   @default(1)
+  unitPrice   Float
+  total       Float
+
+  @@index([quoteId])
+}
+
+// ============================================================================
+// BOOKINGS / JOBS
+// ============================================================================
+
+enum BookingStatus {
+  DRAFT
+  CONFIRMED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  PAID
+  CANCELLED
+  NO_SHOW
+}
+
+model Booking {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  addressId String
+  address   Address @relation(fields: [addressId], references: [id], onDelete: Restrict)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  quoteId String? @unique
+  quote   Quote?  @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+
+  // Scheduling
+  scheduledDate DateTime
+  scheduledTime String  // "09:00" - stored as string for simplicity
+  durationMinutes Int
+
+  // Status
+  status BookingStatus @default(CONFIRMED)
+
+  // Pricing
+  subtotal Float
+  tax      Float  @default(0)
+  discount Float  @default(0)
+  total    Float
+
+  // Details
+  notes             String?
+  specialInstructions String?
+
+  // Tracking
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Recurring
+  recurringRuleId String?
+  recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  isRecurring     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  assignments CleanerAssignment[]
+  checklist   ChecklistItem[]
+  photos      JobPhoto[]
+  invoice     Invoice?
+
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([scheduledDate])
+  @@index([status])
+}
+
+model CleanerAssignment {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  cleanerId String
+  cleaner   Cleaner @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  // Time tracking
+  startTime DateTime?
+  endTime   DateTime?
+  minutesWorked Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bookingId, cleanerId])
+  @@index([bookingId])
+  @@index([cleanerId])
+}
+
+model ChecklistItem {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  completed   Boolean  @default(false)
+  sortOrder   Int
+
+  completedAt DateTime?
+
+  @@index([bookingId])
+}
+
+model JobPhoto {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  url       String
+  type      String  // "BEFORE", "AFTER", "ISSUE"
+  caption   String?
+
+  uploadedAt DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+// ============================================================================
+// RECURRING SCHEDULES
+// ============================================================================
+
+enum RecurringFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+model RecurringRule {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  addressId String
+  address   Address @relation(fields: [addressId], references: [id], onDelete: Restrict)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  // Schedule
+  frequency     RecurringFrequency
+  interval      Int  @default(1)  // e.g., every 2 weeks
+  dayOfWeek     Int?  // 0=Sunday, 1=Monday, etc.
+  dayOfMonth    Int?  // 1-31 for monthly
+  preferredTime String  // "09:00"
+
+  // Active period
+  startDate DateTime
+  endDate   DateTime?
+
+  isActive Boolean @default(true)
+  isPaused Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bookings      Booking[]
+  skipDates     RecurringSkipDate[]
+
+  @@index([workspaceId])
+  @@index([customerId])
+}
+
+model RecurringSkipDate {
+  id String @id @default(cuid())
+
+  recurringRuleId String
+  recurringRule   RecurringRule @relation(fields: [recurringRuleId], references: [id], onDelete: Cascade)
+
+  skipDate DateTime
+  reason   String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([recurringRuleId, skipDate])
+  @@index([recurringRuleId])
+}
+
+// ============================================================================
+// INVOICES & PAYMENTS
+// ============================================================================
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD
+  CASH
+  CHECK
+  BANK_TRANSFER
+}
+
+model Invoice {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  bookingId String @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  invoiceNumber String  // e.g., "INV-2024-001"
+
+  // Amounts
+  subtotal Float
+  tax      Float  @default(0)
+  discount Float  @default(0)
+  total    Float
+
+  depositRequired Float  @default(0)
+  depositPaid     Float  @default(0)
+
+  // Status
+  status InvoiceStatus @default(PENDING)
+
+  // Payment
+  paidAt        DateTime?
+  paymentMethod PaymentMethod?
+
+  // Stripe
+  stripePaymentIntentId String?
+
+  // Due date
+  dueDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  payments Payment[]
+  refunds  Refund[]
+
+  @@unique([workspaceId, invoiceNumber])
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount        Float
+  method        PaymentMethod
+
+  // Stripe
+  stripeChargeId String?
+
+  // Metadata
+  notes         String?
+  processedAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+model Refund {
+  id String @id @default(cuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount  Float
+  reason  String?
+
+  // Stripe
+  stripeRefundId String?
+
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+// ============================================================================
+// MESSAGING & AUTOMATIONS
+// ============================================================================
+
+enum MessageType {
+  SMS
+  EMAIL
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  type   MessageType
+  to     String
+  from   String?
+
+  subject String?  // For email
+  body    String
+
+  status MessageStatus @default(QUEUED)
+
+  // External IDs
+  twilioSid   String?
+  sendgridId  String?
+
+  // Metadata
+  metadata Json?  // {customerId, bookingId, automationId, etc.}
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  failedAt    DateTime?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+enum AutomationType {
+  BOOKING_CONFIRMATION
+  REMINDER_24H
+  REMINDER_MORNING
+  CLEANER_SCHEDULE
+  PAYMENT_REQUEST
+  REVIEW_REQUEST
+  FOLLOW_UP
+}
+
+model Automation {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name        String
+  type        AutomationType
+
+  // Configuration
+  enabled     Boolean @default(true)
+
+  // Templates
+  emailTemplate String?
+  smsTemplate   String?
+
+  // Trigger rules (JSON)
+  triggerRules Json?  // {offset: "-24h", conditions: [...]}
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action      String  // "CREATE", "UPDATE", "DELETE"
+  entity      String  // "Booking", "Customer", etc.
+  entityId    String
+
+  changes     Json?   // {before: {...}, after: {...}}
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([entityId])
+  @@index([createdAt])
+}
