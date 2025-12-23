@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { DashboardLayout } from '@/components/layouts/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,6 +33,7 @@ interface Booking {
 }
 
 export default function BookingsPage() {
+  const router = useRouter()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -75,9 +77,7 @@ export default function BookingsPage() {
             <h2 className="text-3xl font-bold tracking-tight">Bookings</h2>
             <p className="text-gray-500">Manage all cleaning jobs</p>
           </div>
-          <Link href="/bookings/new">
-            <Button>+ New Booking</Button>
-          </Link>
+          <Button onClick={() => router.push('/bookings/new')}>+ New Booking</Button>
         </div>
 
         <Card>
