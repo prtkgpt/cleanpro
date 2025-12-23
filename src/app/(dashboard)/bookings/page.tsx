@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { DashboardLayout } from '@/components/layouts/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -74,7 +75,9 @@ export default function BookingsPage() {
             <h2 className="text-3xl font-bold tracking-tight">Bookings</h2>
             <p className="text-gray-500">Manage all cleaning jobs</p>
           </div>
-          <Button>New Booking</Button>
+          <Link href="/bookings/new">
+            <Button>+ New Booking</Button>
+          </Link>
         </div>
 
         <Card>
@@ -127,7 +130,9 @@ export default function BookingsPage() {
                     </TableCell>
                     <TableCell>${booking.total.toFixed(2)}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm">View</Button>
+                      <Link href={`/bookings/${booking.id}`}>
+                        <Button variant="outline" size="sm">View</Button>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))}
