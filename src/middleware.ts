@@ -18,9 +18,19 @@ export default withAuth(
 
     // Require auth for all other routes
     if (!token) {
+      // For API routes, return 401 instead of redirecting
+      if (path.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
       const loginUrl = new URL('/login', req.url)
       loginUrl.searchParams.set('callbackUrl', path)
       return NextResponse.redirect(loginUrl)
+    }
+
+    // Allow all API routes for authenticated users
+    if (path.startsWith('/api/')) {
+      return NextResponse.next()
     }
 
     // Role-based route protection
