@@ -13,6 +13,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   { name: 'Calendar', href: '/calendar', icon: '📅' },
   { name: 'Bookings', href: '/bookings', icon: '📋' },
+  { name: 'Recurring', href: '/recurring', icon: '🔄' },
   { name: 'Customers', href: '/customers', icon: '👥' },
   { name: 'Cleaners', href: '/cleaners', icon: '🧹' },
   { name: 'Services', href: '/services', icon: '⚙️' },
