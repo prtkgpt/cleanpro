@@ -40,6 +40,8 @@ model Workspace {
   cleaners        Cleaner[]
   services        Service[]
   bookings        Booking[]
+  quotes          Quote[]
+  recurringRules  RecurringRule[]
   invoices        Invoice[]
   messages        Message[]
   automations     Automation[]
@@ -111,9 +113,11 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   // Relations
-  addresses Address[]
-  bookings  Booking[]
-  quotes    Quote[]
+  addresses       Address[]
+  bookings        Booking[]
+  quotes          Quote[]
+  recurringRules  RecurringRule[]
+  invoices        Invoice[]
 
   @@unique([workspaceId, email])
   @@index([workspaceId])
@@ -150,7 +154,8 @@ model Address {
   updatedAt DateTime @updatedAt
 
   // Relations
-  bookings Booking[]
+  bookings        Booking[]
+  recurringRules  RecurringRule[]
 
   @@index([customerId])
 }
@@ -252,8 +257,9 @@ model Service {
   updatedAt DateTime @updatedAt
 
   // Relations
-  bookings    Booking[]
-  quoteItems  QuoteItem[]
+  bookings        Booking[]
+  quoteItems      QuoteItem[]
+  recurringRules  RecurringRule[]
 
   @@index([workspaceId])
 }
