@@ -52,7 +52,9 @@ export default function CustomersPage() {
             <h2 className="text-3xl font-bold tracking-tight">Customers</h2>
             <p className="text-gray-500">Manage your customer database</p>
           </div>
-          <Button>Add Customer</Button>
+          <Button onClick={() => window.location.href = '/customers/new'}>
+            Add Customer
+          </Button>
         </div>
 
         <Card>
