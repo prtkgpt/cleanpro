@@ -1,6 +1,23 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth/auth-options'
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await getServerSession(authOptions)
+
+  // Redirect authenticated users to dashboard
+  if (session) {
+    const role = session.user.role
+    if (role === 'ADMIN' || role === 'DISPATCHER') {
+      redirect('/dashboard')
+    } else if (role === 'CLEANER') {
+      redirect('/jobs')
+    } else if (role === 'CUSTOMER') {
+      redirect('/portal')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="container mx-auto px-4 py-16">
