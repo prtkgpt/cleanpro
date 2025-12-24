@@ -7,6 +7,10 @@ export const metadata: Metadata = {
   description: 'Complete CRM solution for home cleaning businesses',
 }
 
+// Force browser cache refresh
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default function RootLayout({
   children,
 }: {
