@@ -1,6 +1,6 @@
 import stripe from '@/lib/integrations/stripe'
 import prisma from '@/lib/db/prisma'
-import { InvoiceStatus } from '@prisma/client'
+import { InvoiceStatus, BookingStatus } from '@prisma/client'
 
 export async function createPaymentIntent(
   invoiceId: string,
@@ -95,7 +95,7 @@ export async function handlePaymentSuccess(paymentIntentId: string) {
   await prisma.booking.update({
     where: { id: invoice.bookingId },
     data: {
-      status: 'PAID',
+      status: BookingStatus.PAID,
     },
   })
 
